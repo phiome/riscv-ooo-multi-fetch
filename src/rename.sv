@@ -1,5 +1,8 @@
 `timescale 1ns/1ps
 
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
+
 module rename import riscv_pkg::*; #(
     parameter PRF_SIZE = 64
 )(
@@ -62,7 +65,7 @@ module rename import riscv_pkg::*; #(
 
                 if (decode_i[1].rd_used && decode_i[1].rd_idx != 0) begin
                     if (decode_i[0].valid && decode_i[0].rd_used && decode_i[0].rd_idx != 0) begin
-                         rename_prf_rd_o[1]  = free_list[ADDR_WIDTH'((free_head + 1) % PRF_SIZE)];
+                         rename_prf_rd_o[1]  = free_list[(free_head + 1) % PRF_SIZE];
                          rename_old_prf_o[1] = (decode_i[1].rd_idx == decode_i[0].rd_idx) ? free_list[free_head] : rat[decode_i[1].rd_idx];
                     end else begin
                          rename_prf_rd_o[1]  = free_list[free_head];
@@ -85,24 +88,24 @@ module rename import riscv_pkg::*; #(
 
             if (commit_valid_i[0]) begin
                 free_list[next_tail] <= commit_freed_prf_i[0];
-                next_tail = ADDR_WIDTH'((next_tail + 1) % PRF_SIZE);
+                next_tail = (next_tail + 1) % PRF_SIZE;
                 next_count++;
             end
             if (commit_valid_i[1]) begin
                 free_list[next_tail] <= commit_freed_prf_i[1];
-                next_tail = ADDR_WIDTH'((next_tail + 1) % PRF_SIZE);
+                next_tail = (next_tail + 1) % PRF_SIZE;
                 next_count++;
             end
 
             if (!rename_stall_o) begin
                 if (decode_i[0].valid && decode_i[0].rd_used && decode_i[0].rd_idx != 0) begin
                     rat[decode_i[0].rd_idx] <= free_list[next_head];
-                    next_head = ADDR_WIDTH'((next_head + 1) % PRF_SIZE);
+                    next_head = (next_head + 1) % PRF_SIZE;
                     next_count--;
                 end
                 if (decode_i[1].valid && decode_i[1].rd_used && decode_i[1].rd_idx != 0) begin
                     rat[decode_i[1].rd_idx] <= free_list[next_head];
-                    next_head = ADDR_WIDTH'((next_head + 1) % PRF_SIZE);
+                    next_head = (next_head + 1) % PRF_SIZE;
                     next_count--;
                 end
             end
