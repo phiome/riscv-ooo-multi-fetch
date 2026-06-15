@@ -13,6 +13,7 @@ module issue_queue import riscv_pkg::*; #(
     input  logic [5:0]    alloc_prf_rd_i [2],
     
     output logic          iq_stall_o,
+    input  logic [31:0]   rob_head_id_i, // EKLENDİ
     
     input  logic          wb_valid_i [3], 
     input  logic [5:0]    wb_prf_rd_i [3],
@@ -54,12 +55,11 @@ module issue_queue import riscv_pkg::*; #(
             logic is_ready = iq[i].valid && iq[i].rs1_ready && iq[i].rs2_ready;
             ready_for_alu_br[i] = is_ready && (iq[i].dec.is_branch || iq[i].dec.is_jump || (!iq[i].dec.is_mem && !iq[i].dec.is_branch)); 
             ready_for_alu[i]    = is_ready && (!iq[i].dec.is_mem && !iq[i].dec.is_branch && !iq[i].dec.is_jump);
-            ready_for_lsu[i]    = is_ready && iq[i].dec.is_mem;
+            // GÜVENLİK: LSU komutları sadece ROB'un en başındaysa çalışır!
+            ready_for_lsu[i]    = is_ready && iq[i].dec.is_mem && (iq[i].dec.id == rob_head_id_i);
         end
 
-        found_0 = 1'b0; sel_0 = '0;
-        found_1 = 1'b0; sel_1 = '0;
-        found_2 = 1'b0; sel_2 = '0;
+        found_0 = 1'b0; sel_0 = '0; found_1 = 1'b0; sel_1 = '0; found_2 = 1'b0; sel_2 = '0;
 
         for (int i = 0; i < IQ_SIZE; i++) begin
             if (ready_for_alu_br[i] && !found_0) begin found_0 = 1'b1; sel_0 = i[$clog2(IQ_SIZE)-1:0]; end
@@ -90,7 +90,6 @@ module issue_queue import riscv_pkg::*; #(
             logic [$clog2(IQ_SIZE):0] next_count = count;
             logic [IQ_SIZE-1:0] allocated_mask = '0;
 
-            // 1. WAKEUP 
             for (int w = 0; w < 3; w++) begin
                 if (wb_valid_i[w] && wb_prf_rd_i[w] != 0) begin
                     prf_ready_table[wb_prf_rd_i[w]] <= 1'b1; 
@@ -103,24 +102,16 @@ module issue_queue import riscv_pkg::*; #(
                 end
             end
 
-            // 2. CLEAR 
             if (found_0) begin iq[sel_0].valid <= 1'b0; next_count = next_count - 1'b1; end
             if (found_1) begin iq[sel_1].valid <= 1'b0; next_count = next_count - 1'b1; end
             if (found_2) begin iq[sel_2].valid <= 1'b0; next_count = next_count - 1'b1; end
 
-// 3. ALLOCATE
             if (!iq_stall_o) begin
                 for (int a = 0; a < 2; a++) begin
                     if (alloc_valid_i[a]) begin
-                        // ÇÖZÜM: Değişkenleri bloğun en başında tanımlıyoruz!
-                        logic rs1_rdy;
-                        logic rs2_rdy;
-
-                        if (alloc_decode_i[a].rd_used && alloc_decode_i[a].rd_idx != 0) begin
-                            prf_ready_table[alloc_prf_rd_i[a]] <= 1'b0;
-                        end
+                        logic rs1_rdy, rs2_rdy;
+                        if (alloc_decode_i[a].rd_used && alloc_decode_i[a].rd_idx != 0) prf_ready_table[alloc_prf_rd_i[a]] <= 1'b0;
                         
-                        // CDB Bypass Mantığı (Sadece değer ataması yapıyoruz)
                         rs1_rdy = (!alloc_decode_i[a].rs1_used || alloc_decode_i[a].rs1_idx == 0 || prf_ready_table[alloc_prf_rs1_i[a]]);
                         rs2_rdy = (!alloc_decode_i[a].rs2_used || alloc_decode_i[a].rs2_idx == 0 || prf_ready_table[alloc_prf_rs2_i[a]]);
                         
@@ -136,8 +127,7 @@ module issue_queue import riscv_pkg::*; #(
                                 allocated_mask[i] = 1'b1;
                                 iq[i].valid     <= 1'b1; iq[i].dec <= alloc_decode_i[a];
                                 iq[i].prf_rs1   <= alloc_prf_rs1_i[a]; iq[i].prf_rs2 <= alloc_prf_rs2_i[a]; iq[i].prf_rd <= alloc_prf_rd_i[a];
-                                iq[i].rs1_ready <= rs1_rdy;
-                                iq[i].rs2_ready <= rs2_rdy;
+                                iq[i].rs1_ready <= rs1_rdy; iq[i].rs2_ready <= rs2_rdy;
                                 next_count = next_count + 1'b1;
                                 break;
                             end
