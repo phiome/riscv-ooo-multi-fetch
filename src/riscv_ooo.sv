@@ -14,9 +14,6 @@ module riscv_ooo import riscv_pkg::*; #(
     output commit_t         commit_o  [2]  
 );
 
-    // ==========================================
-    // 1. BELLEKLER (IMEM / DMEM)
-    // ==========================================
     logic [31:0] instr_mem [0:2047];
     logic [31:0] data_mem  [0:2047];
 
@@ -25,21 +22,14 @@ module riscv_ooo import riscv_pkg::*; #(
         $readmemh(DMemInitFile, data_mem,  0, 2047);
     end
 
-    assign data_o = data_mem[addr_i[12:2]]; // Testbench Okuması için
+    assign data_o = data_mem[addr_i[12:2]]; 
 
-    // ==========================================
-    // 2. STALL VE KONTROL SİNYALLERİ
-    // ==========================================
     logic fetch_stall, rename_stall, rob_stall, iq_stall;
     assign fetch_stall = rename_stall | rob_stall | iq_stall;
 
-    // Branch (Dallanma) Flush Sinyalleri
     logic        branch_resolved, branch_taken;
     logic [31:0] branch_target;
 
-    // ==========================================
-    // 3. FETCH & DECODE
-    // ==========================================
     logic [31:0] pc_q, instr_id_counter;
     logic [31:0] fetched_pc_1, fetched_pc_2;
     logic [31:0] fetched_instr_1, fetched_instr_2;
@@ -55,10 +45,7 @@ module riscv_ooo import riscv_pkg::*; #(
             instr_id_counter <= 1; 
         end else begin
             if (branch_resolved && branch_taken) begin
-                // Branch alındıysa adresi güncelle (Basit Spekülasyonsuz Yaklaşım)
                 pc_q <= branch_target;
-                // Gerçek bir OoO'da burada tüm kuyruklar FLUSH edilir. 
-                // Ödev kısıtlamalarına göre spekülasyon varsaymayabiliriz [cite: 19-20].
             end else if (!fetch_stall) begin
                 pc_q             <= pc_q + 8; 
                 instr_id_counter <= instr_id_counter + 2;
@@ -75,9 +62,6 @@ module riscv_ooo import riscv_pkg::*; #(
         decode_o[1] = (!fetch_stall && dec_2.valid && !(branch_resolved && branch_taken)) ? dec_2 : '0;
     end
 
-    // ==========================================
-    // 4. RENAME (Yeniden Adlandırma)
-    // ==========================================
     logic       ren_valid [2];
     logic [5:0] ren_rs1 [2], ren_rs2 [2], ren_rd [2];
     logic       com_valid [2]; logic [5:0] com_freed [2]; 
@@ -91,28 +75,32 @@ module riscv_ooo import riscv_pkg::*; #(
         .rename_stall_o    (rename_stall)
     );
 
-    // ==========================================
-    // 5. REORDER BUFFER (ROB)
-    // ==========================================
+    // ------------------------------------
+    // ROB VE YENİ KABLOLARI
+    // ------------------------------------
     execute_t exec_res [3]; 
     assign exec_res[0] = execute_o[0]; assign exec_res[1] = execute_o[1]; assign exec_res[2] = execute_o[2];
+
+    logic [31:0] alloc_instr [2];
+    assign alloc_instr[0] = fetched_instr_1;
+    assign alloc_instr[1] = fetched_instr_2;
+
+    logic [31:0] wb_data [3]; // Execute Ünitelerinden gelecek
 
     rob rob_inst (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .alloc_valid_i (ren_valid), .alloc_decode_i(decode_o), .alloc_prf_rd_i(ren_rd),
+        .alloc_instr_i (alloc_instr), // EKLENDİ
         .rob_stall_o   (rob_stall),
         .execute_i     (exec_res),
+        .wb_data_i     (wb_data),     // EKLENDİ
         .commit_o      (commit_o),
         .commit_valid_o(com_valid)
     );
-    assign com_freed[0] = '0; assign com_freed[1] = '0; // Basit Free List Yönetimi
+    assign com_freed[0] = '0; assign com_freed[1] = '0; 
 
-    // ==========================================
-    // 6. ISSUE QUEUE
-    // ==========================================
     logic       wb_valid [3];
     logic [5:0] wb_prf_rd [3];
-    logic [31:0] wb_data [3];
 
     logic iss_v_0, iss_v_1, iss_v_2;
     dinstr_t iss_dec_0, iss_dec_1, iss_dec_2;
@@ -137,9 +125,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .issue_prf_rs1_2_o(iss_rs1_2), .issue_prf_rs2_2_o(iss_rs2_2), .issue_prf_rd_2_o(iss_rd_2)
     );
 
-    // ==========================================
-    // 7. PHYSICAL REGISTER FILE (PRF)
-    // ==========================================
     logic [31:0] r_data_0_1, r_data_0_2, r_data_1_1, r_data_1_2, r_data_2_1, r_data_2_2;
 
     prf prf_inst (
@@ -153,11 +138,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .wb_en_2(wb_valid[2]), .wb_addr_2(wb_prf_rd[2]), .wb_data_2(wb_data[2])
     );
 
-    // ==========================================
-    // 8. EXECUTION ÜNİTELERİ (A, B, C)
-    // ==========================================
-    
-    // Unit 0: ALU + Branch
     exec_alu_branch unit0 (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .issue_valid_i(iss_v_0), .issue_decode_i(iss_dec_0),
@@ -165,11 +145,9 @@ module riscv_ooo import riscv_pkg::*; #(
         
         .wb_valid_o(wb_valid[0]), .wb_prf_rd_o(wb_prf_rd[0]), .wb_data_o(wb_data[0]),
         .execute_o(execute_o[0]),
-        
         .branch_resolved_o(branch_resolved), .branch_taken_o(branch_taken), .branch_target_o(branch_target)
     );
 
-    // Unit 1: Sadece ALU
     exec_alu unit1 (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .issue_valid_i(iss_v_1), .issue_decode_i(iss_dec_1),
@@ -179,7 +157,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .execute_o(execute_o[1])
     );
 
-    // Unit 2: LSU (Load/Store)
     logic [31:0] lsu_addr, lsu_wdata;
     logic lsu_we;
     
@@ -190,16 +167,12 @@ module riscv_ooo import riscv_pkg::*; #(
         
         .wb_valid_o(wb_valid[2]), .wb_prf_rd_o(wb_prf_rd[2]), .wb_data_o(wb_data[2]),
         .execute_o(execute_o[2]),
-        
         .mem_addr_o(lsu_addr), .mem_wdata_o(lsu_wdata), .mem_we_o(lsu_we),
         .mem_rdata_i(data_mem[lsu_addr[12:2]])
     );
 
-    // Veri Belleğine Yazma İşlemi (Senkron)
     always_ff @(posedge clk_i) begin
-        if (lsu_we) begin
-            data_mem[lsu_addr[12:2]] <= lsu_wdata;
-        end
+        if (lsu_we) data_mem[lsu_addr[12:2]] <= lsu_wdata;
     end
 
 endmodule
