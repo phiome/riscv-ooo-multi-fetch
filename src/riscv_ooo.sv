@@ -64,7 +64,7 @@ module riscv_ooo import riscv_pkg::*; #(
 
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
-            pc_q <= '0;
+            pc_q <= 32'h8000_0000;
             instr_id_counter <= 1; 
         end else begin
             if (branch_resolved) begin
