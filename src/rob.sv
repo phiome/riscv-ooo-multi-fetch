@@ -5,11 +5,10 @@ module rob import riscv_pkg::*; #(
 )(
     input  logic          clk_i,
     input  logic          rstn_i,
-    
     input  logic          alloc_valid_i [2],
     input  dinstr_t       alloc_decode_i [2],
     input  logic [5:0]    alloc_prf_rd_i [2],
-    input  logic [5:0]    alloc_old_prf_i [2], // EKLENDİ
+    input  logic [5:0]    alloc_old_prf_i [2], // Geri dönüşüm
     input  logic [31:0]   alloc_instr_i [2], 
     
     output logic          rob_stall_o,
@@ -23,7 +22,8 @@ module rob import riscv_pkg::*; #(
     
     output commit_t       commit_o [2],
     output logic          commit_valid_o [2],
-    output logic [5:0]    commit_freed_prf_o [2] // EKLENDİ: Boşa çıkan PRF'ler
+    output logic [5:0]    commit_freed_prf_o [2], // Rename'e gönderilecek
+    output logic [4:0]    commit_rd_idx_o [2]
 );
 
     typedef struct packed {
@@ -33,7 +33,7 @@ module rob import riscv_pkg::*; #(
         logic[31:0] pc;
         logic[4:0]  rd_idx;
         logic[5:0]  prf_idx;
-        logic[5:0]  old_prf; // EKLENDİ
+        logic[5:0]  old_prf; 
         logic[31:0] instr;  
         logic[31:0] result; 
         logic[31:0] mem_addr;
@@ -55,6 +55,7 @@ module rob import riscv_pkg::*; #(
             commit_o[0] <= '0; commit_o[1] <= '0;
             commit_valid_o[0] <= 1'b0; commit_valid_o[1] <= 1'b0;
             commit_freed_prf_o[0] <= '0; commit_freed_prf_o[1] <= '0;
+            commit_rd_idx_o[0] <= '0; commit_rd_idx_o[1] <= '0;
         end else begin
             logic [$clog2(ROB_SIZE)-1:0] next_head = head;
             logic [$clog2(ROB_SIZE)-1:0] next_tail = tail;
@@ -63,8 +64,8 @@ module rob import riscv_pkg::*; #(
             commit_o[0] <= '0; commit_o[1] <= '0;
             commit_valid_o[0] <= 1'b0; commit_valid_o[1] <= 1'b0;
             commit_freed_prf_o[0] <= '0; commit_freed_prf_o[1] <= '0;
+            commit_rd_idx_o[0] <= '0; commit_rd_idx_o[1] <= '0;
 
-            // 1. COMMIT (Geri Dönüşüm Burada Tetiklenir)
             if (next_count > 0 && rob_queue[next_head].valid && rob_queue[next_head].ready) begin
                 commit_o[0].valid    <= 1'b1;
                 commit_o[0].id       <= rob_queue[next_head].id;
@@ -77,7 +78,8 @@ module rob import riscv_pkg::*; #(
                 commit_o[0].mem_wrt  <= rob_queue[next_head].mem_wrt;
                 
                 commit_valid_o[0]     <= 1'b1;
-                commit_freed_prf_o[0] <= rob_queue[next_head].old_prf; // Rename'e gönder
+                commit_freed_prf_o[0] <= rob_queue[next_head].old_prf; 
+                commit_rd_idx_o[0]    <= rob_queue[next_head].rd_idx; 
                 
                 rob_queue[next_head].valid <= 1'b0;
                 next_head = next_head + 1'b1;
@@ -95,7 +97,8 @@ module rob import riscv_pkg::*; #(
                     commit_o[1].mem_wrt  <= rob_queue[next_head].mem_wrt;
                     
                     commit_valid_o[1]     <= 1'b1;
-                    commit_freed_prf_o[1] <= rob_queue[next_head].old_prf; // Rename'e gönder
+                    commit_freed_prf_o[1] <= rob_queue[next_head].old_prf; 
+                    commit_rd_idx_o[1]    <= rob_queue[next_head].rd_idx;
                     
                     rob_queue[next_head].valid <= 1'b0;
                     next_head = next_head + 1'b1;
@@ -103,7 +106,6 @@ module rob import riscv_pkg::*; #(
                 end
             end
 
-            // 2. EXECUTE WRITEBACK
             for (integer i = 0; i < ROB_SIZE; i++) begin
                 if (rob_queue[i].valid && !rob_queue[i].ready) begin
                     if (execute_i[0].valid && execute_i[0].id == rob_queue[i].id) begin
@@ -119,15 +121,14 @@ module rob import riscv_pkg::*; #(
                 end
             end
 
-            // 3. ALLOCATION
             if (!rob_stall_o) begin
                 if (alloc_valid_i[0]) begin
                     rob_queue[next_tail].valid   <= 1'b1; rob_queue[next_tail].ready <= 1'b0;
                     rob_queue[next_tail].id      <= alloc_decode_i[0].id;
                     rob_queue[next_tail].pc      <= alloc_decode_i[0].pc;
-                    rob_queue[next_tail].rd_idx  <= alloc_decode_i[0].rd_idx;
+                    rob_queue[next_tail].rd_idx  <= alloc_decode_i[0].rd_used ? alloc_decode_i[0].rd_idx : 5'b0; 
                     rob_queue[next_tail].prf_idx <= alloc_prf_rd_i[0];
-                    rob_queue[next_tail].old_prf <= alloc_old_prf_i[0]; // Kaydet
+                    rob_queue[next_tail].old_prf <= alloc_old_prf_i[0]; 
                     rob_queue[next_tail].instr   <= alloc_instr_i[0]; 
                     rob_queue[next_tail].mem_wrt <= 1'b0;
                     next_tail = next_tail + 1'b1; next_count = next_count + 1'b1;
@@ -136,9 +137,9 @@ module rob import riscv_pkg::*; #(
                     rob_queue[next_tail].valid   <= 1'b1; rob_queue[next_tail].ready <= 1'b0;
                     rob_queue[next_tail].id      <= alloc_decode_i[1].id;
                     rob_queue[next_tail].pc      <= alloc_decode_i[1].pc;
-                    rob_queue[next_tail].rd_idx  <= alloc_decode_i[1].rd_idx;
+                    rob_queue[next_tail].rd_idx  <= alloc_decode_i[1].rd_used ? alloc_decode_i[1].rd_idx : 5'b0; 
                     rob_queue[next_tail].prf_idx <= alloc_prf_rd_i[1];
-                    rob_queue[next_tail].old_prf <= alloc_old_prf_i[1]; // Kaydet
+                    rob_queue[next_tail].old_prf <= alloc_old_prf_i[1]; 
                     rob_queue[next_tail].instr   <= alloc_instr_i[1]; 
                     rob_queue[next_tail].mem_wrt <= 1'b0;
                     next_tail = next_tail + 1'b1; next_count = next_count + 1'b1;

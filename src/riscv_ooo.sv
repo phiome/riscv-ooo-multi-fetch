@@ -64,7 +64,7 @@ module riscv_ooo import riscv_pkg::*; #(
 
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
-            pc_q <= 32'h8000_0000;
+            pc_q <= 32'h8000_0000; 
             instr_id_counter <= 1; 
         end else begin
             if (branch_resolved) begin
@@ -94,14 +94,16 @@ module riscv_ooo import riscv_pkg::*; #(
     logic       ren_valid [2];
     logic [5:0] ren_rs1 [2], ren_rs2 [2], ren_rd [2], ren_old_prf [2];
     logic       com_valid [2]; logic [5:0] com_freed [2]; 
+    logic [4:0] com_rd_idx [2];
 
     rename rename_inst (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .decode_i          (decode_o), 
         .rename_valid_o    (ren_valid),
         .rename_prf_rs1_o  (ren_rs1), .rename_prf_rs2_o  (ren_rs2), .rename_prf_rd_o   (ren_rd),
-        .rename_old_prf_o  (ren_old_prf), // BAĞLANDI
+        .rename_old_prf_o  (ren_old_prf), 
         .commit_valid_i    (com_valid), .commit_freed_prf_i(com_freed),
+        .commit_rd_idx_i   (com_rd_idx), 
         .rename_stall_o    (rename_stall)
     );
 
@@ -117,13 +119,14 @@ module riscv_ooo import riscv_pkg::*; #(
     rob rob_inst (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .alloc_valid_i (ren_valid), .alloc_decode_i(decode_o), .alloc_prf_rd_i(ren_rd), 
-        .alloc_old_prf_i(ren_old_prf), // BAĞLANDI
+        .alloc_old_prf_i(ren_old_prf), 
         .alloc_instr_i (alloc_instr),
         .rob_stall_o   (rob_stall), .rob_head_id_o(rob_head_id),
         .execute_i     (exec_res),  .wb_data_i    (wb_data),
         .lsu_log_addr_i(lsu_log_addr), .lsu_log_data_i(lsu_log_data), .lsu_log_we_i(lsu_log_we),
         .commit_o      (commit_o),  .commit_valid_o(com_valid),
-        .commit_freed_prf_o(com_freed) // BAĞLANDI (Döngü Tamamlandı!)
+        .commit_freed_prf_o(com_freed), 
+        .commit_rd_idx_o   (com_rd_idx) 
     );
 
     logic       wb_valid [3];

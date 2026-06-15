@@ -1,5 +1,4 @@
 `timescale 1ns/1ps
-
 /* verilator lint_off WIDTHEXPAND */
 /* verilator lint_off WIDTHTRUNC */
 
@@ -8,23 +7,20 @@ module rename import riscv_pkg::*; #(
 )(
     input  logic            clk_i,
     input  logic            rstn_i,
-    
     input  dinstr_t         decode_i [2],
-    
     output logic            rename_valid_o [2], 
     output logic [5:0]      rename_prf_rs1_o [2], 
     output logic [5:0]      rename_prf_rs2_o [2], 
     output logic [5:0]      rename_prf_rd_o  [2], 
-    output logic [5:0]      rename_old_prf_o [2],
+    output logic [5:0]      rename_old_prf_o [2], // Geri dönüşüm için şart!
     
     input  logic            commit_valid_i [2],
     input  logic [5:0]      commit_freed_prf_i [2], 
-    
+    input  logic [4:0]      commit_rd_idx_i [2], 
     output logic            rename_stall_o 
 );
 
     localparam ADDR_WIDTH = $clog2(PRF_SIZE);
-
     logic [5:0] rat [0:31];
     logic [5:0] free_list [0:PRF_SIZE-1];
     logic [ADDR_WIDTH-1:0] free_head, free_tail;
@@ -38,7 +34,6 @@ module rename import riscv_pkg::*; #(
         rename_prf_rs1_o[1] = '0; rename_prf_rs2_o[1] = '0; rename_prf_rd_o[1] = '0; rename_old_prf_o[1] = '0;
 
         if (!rename_stall_o) begin
-            // --- KOMUT 1 ---
             if (decode_i[0].valid) begin
                 rename_valid_o[0] = 1'b1;
                 rename_prf_rs1_o[0] = (decode_i[0].rs1_idx == 0) ? '0 : rat[decode_i[0].rs1_idx];
@@ -49,10 +44,8 @@ module rename import riscv_pkg::*; #(
                 end
             end
 
-            // --- KOMUT 2 ---
             if (decode_i[1].valid) begin
                 rename_valid_o[1] = 1'b1;
-                
                 if (decode_i[1].rs1_used && decode_i[1].rs1_idx != 0 && decode_i[0].valid && decode_i[0].rd_used && decode_i[1].rs1_idx == decode_i[0].rd_idx)
                     rename_prf_rs1_o[1] = free_list[free_head];
                 else
@@ -86,12 +79,12 @@ module rename import riscv_pkg::*; #(
             logic [ADDR_WIDTH-1:0] next_tail = free_tail;
             logic [6:0] next_count = free_count;
 
-            if (commit_valid_i[0]) begin
+            if (commit_valid_i[0] && commit_rd_idx_i[0] != 0) begin
                 free_list[next_tail] <= commit_freed_prf_i[0];
                 next_tail = (next_tail + 1) % PRF_SIZE;
                 next_count++;
             end
-            if (commit_valid_i[1]) begin
+            if (commit_valid_i[1] && commit_rd_idx_i[1] != 0) begin
                 free_list[next_tail] <= commit_freed_prf_i[1];
                 next_tail = (next_tail + 1) % PRF_SIZE;
                 next_count++;

@@ -114,7 +114,7 @@ module issue_queue import riscv_pkg::*; #(
                         rs1_rdy = (!alloc_decode_i[a].rs1_used || alloc_decode_i[a].rs1_idx == 0 || prf_ready_table[alloc_prf_rs1_i[a]]);
                         rs2_rdy = (!alloc_decode_i[a].rs2_used || alloc_decode_i[a].rs2_idx == 0 || prf_ready_table[alloc_prf_rs2_i[a]]);
                         
-                        // Intra-packet dependency check (İkinci komut birincinin sonucunu beklemeli)
+                        // İkinci komut birincinin sonucunu bekliyorsa RAW kilitlenmesini engelle
                         if (a == 1 && alloc_valid_i[0] && alloc_decode_i[0].rd_used && alloc_decode_i[0].rd_idx != 0) begin
                             if (alloc_prf_rs1_i[1] == alloc_prf_rd_i[0]) rs1_rdy = 1'b0;
                             if (alloc_prf_rs2_i[1] == alloc_prf_rd_i[0]) rs2_rdy = 1'b0;
