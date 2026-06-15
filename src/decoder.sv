@@ -13,7 +13,7 @@ module decoder import riscv_pkg::*; (
     logic [2:0] funct3;
     logic [6:0] funct7;
 
-    // --- ÖZEL KOMUT SETİ (CUSTOM ISA) BİT HARİTASI ---
+    // --- SENİN ÖZEL (CUSTOM) BİT HARİTAN (HW_FINAL.pdf) ---
     assign opcode  = instr_i[19:13];
     assign rs2_idx = instr_i[24:20];
     assign rs1_idx = instr_i[12:8];
@@ -22,7 +22,6 @@ module decoder import riscv_pkg::*; (
     assign funct7  = instr_i[31:25];
 
     always_comb begin
-        // Latch oluşumunu engellemek için varsayılan değerler
         dinstr_o.valid     = 1'b0;
         dinstr_o.is_store  = 1'b0;
         dinstr_o.is_mem    = 1'b0;
@@ -43,7 +42,6 @@ module decoder import riscv_pkg::*; (
         dinstr_o.op        = UNKNOWN;
 
         case (opcode)
-            
             // LUI
             7'b1110101: begin 
                 dinstr_o.valid    = 1'b1;
@@ -196,10 +194,7 @@ module decoder import riscv_pkg::*; (
                     default: dinstr_o.valid = 1'b0; 
                 endcase
             end
-
-            default: begin
-                dinstr_o.valid = 1'b0;
-            end
+            default: dinstr_o.valid = 1'b0;
         endcase
     end
 endmodule
