@@ -15,25 +15,23 @@ module exec_lsu import riscv_pkg::*; (
     output logic [31:0]   wb_data_o,
     output execute_t      execute_o,
     
-    // --- YENİ: Okuma ve Yazma Portları Ayrıldı ---
-    output logic [31:0]   mem_raddr_o, // Okuma Adresi (Anında)
-    input  logic [31:0]   mem_rdata_i, // Okunan Veri
+    output logic [31:0]   mem_raddr_o, 
+    input  logic [31:0]   mem_rdata_i, 
     
-    output logic [31:0]   mem_waddr_o, // Yazma Adresi (Gecikmeli)
-    output logic [31:0]   mem_wdata_o, // Yazılacak Maskelenmiş Veri
-    output logic          mem_we_o,    // Yazma İzni
+    output logic [31:0]   mem_waddr_o, 
+    output logic [31:0]   mem_wdata_o, 
+    output logic          mem_we_o,    
     
     output logic [31:0]   lsu_log_addr_o,
     output logic [31:0]   lsu_log_data_o,
     output logic          lsu_log_we_o
 );
 
-    // Kombinasyonel Adres Hesaplama
     logic [31:0] combo_addr;
     assign combo_addr  = rs1_data_i + issue_decode_i.imm;
     assign mem_raddr_o = combo_addr;
 
-    // 1 Saykıl Gecikme Registerları
+    // 1 cycle buffer
     logic        delay_valid;
     dinstr_t     delay_dec;
     logic [5:0]  delay_prf_rd;
@@ -48,22 +46,21 @@ module exec_lsu import riscv_pkg::*; (
             delay_prf_rd    <= prf_rd_i;
             delay_addr      <= combo_addr;
             delay_wdata_raw <= rs2_data_i;
-            delay_rdata     <= mem_rdata_i; // Bellekten okunan ham veri kaydedildi
+            delay_rdata     <= mem_rdata_i; 
         end
     end
 
-    // --- Aşama 2: Maskeleme ve Yazma (LATCH UYARISI ÇÖZÜLDÜ) ---
+    //  masking for latch errors
     logic [31:0] shifted_rdata;
     logic [31:0] load_data;
     logic [31:0] masked_wdata;
 
     always_comb begin
-        // Değişkenlere varsayılan değer vererek Latch oluşumunu engelliyoruz
         shifted_rdata = 32'b0;
         load_data     = 32'b0;
         masked_wdata  = delay_wdata_raw;
 
-        // LOAD (Okuma) Maskelemesi
+        // LOAD mask
         if (delay_dec.is_mem && !delay_dec.is_store) begin
             shifted_rdata = delay_rdata >> (8 * delay_addr[1:0]);
             case (delay_dec.op)
@@ -76,7 +73,7 @@ module exec_lsu import riscv_pkg::*; (
             endcase
         end
 
-        // STORE (Yazma) Maskelemesi
+        // STORE masking
         if (delay_dec.is_mem && delay_dec.is_store) begin
             if (delay_dec.op == SB) begin
                 if (delay_addr[1:0] == 2'b00) masked_wdata = {delay_rdata[31:8], delay_wdata_raw[7:0]};
@@ -89,7 +86,6 @@ module exec_lsu import riscv_pkg::*; (
             end
         end
 
-        // Çıkış Atamaları
         wb_valid_o  = delay_valid;
         wb_prf_rd_o = delay_prf_rd;
         wb_data_o   = load_data;
@@ -102,7 +98,7 @@ module exec_lsu import riscv_pkg::*; (
         mem_we_o    = delay_valid && delay_dec.is_store;
 
         lsu_log_addr_o = delay_addr;
-        lsu_log_data_o = delay_wdata_raw; // Log her zaman maskesiz ham veriyi ister
+        lsu_log_data_o = delay_wdata_raw; 
         lsu_log_we_o   = delay_valid && delay_dec.is_store;
     end
 endmodule

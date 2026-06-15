@@ -16,7 +16,7 @@ module exec_alu_branch import riscv_pkg::*; (
     
     output execute_t      execute_o,
     
-    // Branch/Jump Çıkışları (İleride Fetch aşamasını düzeltmek için)
+    // Branch/Jump outputs
     output logic          branch_resolved_o,
     output logic          branch_taken_o,
     output logic [31:0]   branch_target_o
@@ -27,7 +27,7 @@ module exec_alu_branch import riscv_pkg::*; (
     logic [31:0] target_pc;
 
     always_comb begin
-        // --- 1. ALU KISMI ---
+        // alu
         if (issue_decode_i.op == AUIPC || issue_decode_i.is_jump || issue_decode_i.is_branch) 
             op1 = issue_decode_i.pc;
         else if (issue_decode_i.op == LUI) 
@@ -55,12 +55,12 @@ module exec_alu_branch import riscv_pkg::*; (
             SLT, SLTI: alu_result = ($signed(op1) < $signed(op2)) ? 32'b1 : 32'b0;
             SLTU, SLTIU: alu_result = (op1 < op2) ? 32'b1 : 32'b0;
             
-            // Jumps (JAL, JALR RD'ye her zaman PC+4 yazar)
+            // Jumps
             JAL, JALR: begin
                 alu_result = issue_decode_i.pc + 4; 
                 is_taken = 1'b1;
                 target_pc = (issue_decode_i.op == JALR) ? (rs1_data_i + issue_decode_i.imm) : (issue_decode_i.pc + issue_decode_i.imm);
-                target_pc[0] = 1'b0; // JALR'da LSB sıfırlanır
+                target_pc[0] = 1'b0; 
             end
             
             // Branches
@@ -77,7 +77,6 @@ module exec_alu_branch import riscv_pkg::*; (
             target_pc = issue_decode_i.pc + issue_decode_i.imm;
         end
 
-        // Çıkış Atamaları
         wb_valid_o  = issue_valid_i;
         wb_prf_rd_o = prf_rd_i;
         wb_data_o   = alu_result;

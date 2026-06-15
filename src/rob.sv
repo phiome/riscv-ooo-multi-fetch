@@ -8,7 +8,7 @@ module rob import riscv_pkg::*; #(
     input  logic          alloc_valid_i [2],
     input  dinstr_t       alloc_decode_i [2],
     input  logic [5:0]    alloc_prf_rd_i [2],
-    input  logic [5:0]    alloc_old_prf_i [2], // Geri dönüşüm
+    input  logic [5:0]    alloc_old_prf_i [2], 
     input  logic [31:0]   alloc_instr_i [2], 
     
     output logic          rob_stall_o,
@@ -22,7 +22,7 @@ module rob import riscv_pkg::*; #(
     
     output commit_t       commit_o [2],
     output logic          commit_valid_o [2],
-    output logic [5:0]    commit_freed_prf_o [2], // Rename'e gönderilecek
+    output logic [5:0]    commit_freed_prf_o [2], 
     output logic [4:0]    commit_rd_idx_o [2]
 );
 

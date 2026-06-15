@@ -12,7 +12,7 @@ module rename import riscv_pkg::*; #(
     output logic [5:0]      rename_prf_rs1_o [2], 
     output logic [5:0]      rename_prf_rs2_o [2], 
     output logic [5:0]      rename_prf_rd_o  [2], 
-    output logic [5:0]      rename_old_prf_o [2], // Geri dönüşüm için şart!
+    output logic [5:0]      rename_old_prf_o [2],
     
     input  logic            commit_valid_i [2],
     input  logic [5:0]      commit_freed_prf_i [2], 
@@ -81,12 +81,12 @@ module rename import riscv_pkg::*; #(
 
             if (commit_valid_i[0] && commit_rd_idx_i[0] != 0) begin
                 free_list[next_tail] <= commit_freed_prf_i[0];
-                next_tail = (next_tail + 1) % PRF_SIZE;
+                next_tail = 6'((next_tail + 6'd1) % 64);
                 next_count++;
             end
             if (commit_valid_i[1] && commit_rd_idx_i[1] != 0) begin
                 free_list[next_tail] <= commit_freed_prf_i[1];
-                next_tail = (next_tail + 1) % PRF_SIZE;
+                next_tail = 6'((next_tail + 6'd1) % 64);
                 next_count++;
             end
 

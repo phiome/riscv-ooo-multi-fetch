@@ -33,7 +33,7 @@ module riscv_ooo import riscv_pkg::*; #(
     assign fetched_instr_1 = instr_mem[fetched_pc_1[12:2]];
     assign fetched_instr_2 = instr_mem[fetched_pc_2[12:2]];
 
-    // --- EKLENDİ: Gecikmeli Dondurma Mantığı (EOF) ---
+    // EOF
     logic eof_reached;
     logic fetch_stall, rename_stall, rob_stall, iq_stall, branch_in_flight;
     assign fetch_stall = rename_stall | rob_stall | iq_stall | branch_in_flight | eof_reached;
@@ -42,8 +42,6 @@ module riscv_ooo import riscv_pkg::*; #(
         if (!rstn_i) begin
             eof_reached <= 1'b0;
         end else if (!fetch_stall) begin
-            // 0'ı fetch ettiğimiz saykılda stall yok, komut içeri girer.
-            // Bir sonraki saykılda eof_reached 1 olur ve sistem tamamen donar.
             if (fetched_instr_1 == 32'h00000000 || fetched_instr_2 == 32'h00000000) begin
                 eof_reached <= 1'b1;
             end
@@ -100,7 +98,6 @@ module riscv_ooo import riscv_pkg::*; #(
         if (!fetch_stall) begin
             if (dec_1.valid) begin
                 decode_o[0] = dec_1;
-                // dec_1 0 ise dec_2'yi çöpe atıyoruz ki aynı anda iki tane 0 içeri girmesin.
                 if (!(dec_1.is_branch || dec_1.is_jump || fetched_instr_1 == 32'h00000000) && dec_2.valid) begin
                     decode_o[1] = dec_2;
                 end

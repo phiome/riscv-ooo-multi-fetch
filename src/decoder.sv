@@ -13,7 +13,6 @@ module decoder import riscv_pkg::*; (
     logic [2:0] funct3;
     logic [6:0] funct7;
 
-    // --- SENİN ÖZEL (CUSTOM) BİT HARİTAN ---
     assign opcode  = instr_i[19:13];
     assign rs2_idx = instr_i[24:20];
     assign rs1_idx = instr_i[12:8];
@@ -41,7 +40,6 @@ module decoder import riscv_pkg::*; (
         dinstr_o.id        = id_i;
         dinstr_o.op        = UNKNOWN;
 
-        // EKLENDİ: Program sonu komutu (0x00000000) valid kabul edilecek ki log'a yazılsın.
         if (instr_i == 32'h00000000) begin
             dinstr_o.valid = 1'b1;
             dinstr_o.op    = UNKNOWN;
