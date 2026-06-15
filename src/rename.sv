@@ -20,7 +20,7 @@ module rename import riscv_pkg::*; #(
     output logic            rename_stall_o 
 );
 
-    // Yerel parametre: PRF_SIZE için gereken bit sayısı
+    // PRF_SIZE'a göre adres genişliğini otomatik hesapla
     localparam ADDR_WIDTH = $clog2(PRF_SIZE);
 
     logic [5:0] rat [0:31];
@@ -63,7 +63,8 @@ module rename import riscv_pkg::*; #(
 
                 if (decode_i[1].rd_used && decode_i[1].rd_idx != 0) begin
                     if (decode_i[0].valid && decode_i[0].rd_used && decode_i[0].rd_idx != 0) begin
-                         rename_prf_rd_o[1] = free_list[(free_head + 1) % PRF_SIZE];
+                         // Burada da tip cast kullandık
+                         rename_prf_rd_o[1] = free_list[(free_head + {{(ADDR_WIDTH-1){1'b0}}, 1'b1}) % PRF_SIZE];
                          rename_old_prf_o[1] = (decode_i[1].rd_idx == decode_i[0].rd_idx) ? free_list[free_head] : rat[decode_i[1].rd_idx];
                     end else begin
                          rename_prf_rd_o[1]  = free_list[free_head];
@@ -86,24 +87,24 @@ module rename import riscv_pkg::*; #(
 
             if (commit_valid_i[0]) begin
                 free_list[next_tail] <= commit_freed_prf_i[0];
-                next_tail = ($bits(next_tail))'((next_tail + 1) % PRF_SIZE);
+                next_tail = ($bits(next_tail))'((next_tail + {{(ADDR_WIDTH-1){1'b0}}, 1'b1}) % PRF_SIZE);
                 next_count++;
             end
             if (commit_valid_i[1]) begin
                 free_list[next_tail] <= commit_freed_prf_i[1];
-                next_tail = ($bits(next_tail))'((next_tail + 1) % PRF_SIZE);
+                next_tail = ($bits(next_tail))'((next_tail + {{(ADDR_WIDTH-1){1'b0}}, 1'b1}) % PRF_SIZE);
                 next_count++;
             end
 
             if (!rename_stall_o) begin
                 if (decode_i[0].valid && decode_i[0].rd_used && decode_i[0].rd_idx != 0) begin
                     rat[decode_i[0].rd_idx] <= free_list[next_head];
-                    next_head = ($bits(next_head))'((next_head + 1) % PRF_SIZE);
+                    next_head = ($bits(next_head))'((next_head + {{(ADDR_WIDTH-1){1'b0}}, 1'b1}) % PRF_SIZE);
                     next_count--;
                 end
                 if (decode_i[1].valid && decode_i[1].rd_used && decode_i[1].rd_idx != 0) begin
                     rat[decode_i[1].rd_idx] <= free_list[next_head];
-                    next_head = ($bits(next_head))'((next_head + 1) % PRF_SIZE);
+                    next_head = ($bits(next_head))'((next_head + {{(ADDR_WIDTH-1){1'b0}}, 1'b1}) % PRF_SIZE);
                     next_count--;
                 end
             end
