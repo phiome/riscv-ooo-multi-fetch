@@ -33,17 +33,26 @@ module riscv_ooo import riscv_pkg::*; #(
     assign fetched_instr_1 = instr_mem[fetched_pc_1[12:2]];
     assign fetched_instr_2 = instr_mem[fetched_pc_2[12:2]];
 
-    // --- STALL VE KONTROL (EOF Eklendi) ---
-    logic eof_stall;
-    assign eof_stall = (fetched_instr_1 == 32'h00000000);
-
+    // --- EKLENDİ: Gecikmeli Dondurma Mantığı (EOF) ---
+    logic eof_reached;
     logic fetch_stall, rename_stall, rob_stall, iq_stall, branch_in_flight;
-    assign fetch_stall = rename_stall | rob_stall | iq_stall | branch_in_flight | eof_stall;
+    assign fetch_stall = rename_stall | rob_stall | iq_stall | branch_in_flight | eof_reached;
+
+    always_ff @(posedge clk_i) begin
+        if (!rstn_i) begin
+            eof_reached <= 1'b0;
+        end else if (!fetch_stall) begin
+            // 0'ı fetch ettiğimiz saykılda stall yok, komut içeri girer.
+            // Bir sonraki saykılda eof_reached 1 olur ve sistem tamamen donar.
+            if (fetched_instr_1 == 32'h00000000 || fetched_instr_2 == 32'h00000000) begin
+                eof_reached <= 1'b1;
+            end
+        end
+    end
 
     logic        branch_resolved, branch_taken;
     logic [31:0] branch_target, fallthrough_pc;
 
-    // --- FETCH AŞAMASI ---
     dinstr_t dec_1, dec_2;
     decoder dec_inst_1 (.clk_i(clk_i), .instr_i(fetched_instr_1), .pc_i(fetched_pc_1), .id_i(instr_id_counter),   .dinstr_o(dec_1));
     decoder dec_inst_2 (.clk_i(clk_i), .instr_i(fetched_instr_2), .pc_i(fetched_pc_2), .id_i(instr_id_counter+1), .dinstr_o(dec_2));
@@ -69,7 +78,7 @@ module riscv_ooo import riscv_pkg::*; #(
 
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
-            pc_q <= 32'h8000_0000; // Standart RISC-V Başlangıcı
+            pc_q <= 32'h8000_0000; 
             instr_id_counter <= 1; 
         end else begin
             if (branch_resolved) begin
@@ -91,12 +100,14 @@ module riscv_ooo import riscv_pkg::*; #(
         if (!fetch_stall) begin
             if (dec_1.valid) begin
                 decode_o[0] = dec_1;
-                if (!(dec_1.is_branch || dec_1.is_jump) && dec_2.valid) decode_o[1] = dec_2;
+                // dec_1 0 ise dec_2'yi çöpe atıyoruz ki aynı anda iki tane 0 içeri girmesin.
+                if (!(dec_1.is_branch || dec_1.is_jump || fetched_instr_1 == 32'h00000000) && dec_2.valid) begin
+                    decode_o[1] = dec_2;
+                end
             end
         end
     end
 
-    // --- RENAME ---
     logic       ren_valid [2];
     logic [5:0] ren_rs1 [2], ren_rs2 [2], ren_rd [2], ren_old_prf [2];
     logic       com_valid [2]; logic [5:0] com_freed [2]; logic [4:0] com_rd_idx [2];
@@ -111,7 +122,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .rename_stall_o    (rename_stall)
     );
 
-    // --- ROB ---
     execute_t exec_res [3]; 
     assign exec_res[0] = execute_o[0]; assign exec_res[1] = execute_o[1]; assign exec_res[2] = execute_o[2];
 
@@ -132,7 +142,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .commit_freed_prf_o(com_freed), .commit_rd_idx_o   (com_rd_idx) 
     );
 
-    // --- ISSUE QUEUE ---
     logic       wb_valid [3]; logic [5:0] wb_prf_rd [3];
     logic iss_v_0, iss_v_1, iss_v_2; dinstr_t iss_dec_0, iss_dec_1, iss_dec_2;
     logic [5:0] iss_rs1_0, iss_rs2_0, iss_rd_0, iss_rs1_1, iss_rs2_1, iss_rd_1, iss_rs1_2, iss_rs2_2, iss_rd_2;
@@ -148,7 +157,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .issue_valid_2_o(iss_v_2), .issue_decode_2_o(iss_dec_2), .issue_prf_rs1_2_o(iss_rs1_2), .issue_prf_rs2_2_o(iss_rs2_2), .issue_prf_rd_2_o(iss_rd_2)
     );
 
-    // --- PRF ---
     logic [31:0] r_data_0_1, r_data_0_2, r_data_1_1, r_data_1_2, r_data_2_1, r_data_2_2;
     prf prf_inst (
         .clk_i(clk_i), .rstn_i(rstn_i),
@@ -160,7 +168,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .wb_en_2(wb_valid[2]), .wb_addr_2(wb_prf_rd[2]), .wb_data_2(wb_data[2])
     );
 
-    // --- EXECUTION ÜNİTELERİ ---
     exec_alu_branch unit0 (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .issue_valid_i(iss_v_0), .issue_decode_i(iss_dec_0), .rs1_data_i(r_data_0_1), .rs2_data_i(r_data_0_2), .prf_rd_i(iss_rd_0),
