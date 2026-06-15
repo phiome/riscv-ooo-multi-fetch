@@ -145,4 +145,3 @@ module issue_queue import riscv_pkg::*; #(
         end
     end
 endmodule
-
