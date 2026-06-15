@@ -113,7 +113,7 @@ module rename import riscv_pkg::*; #(
     // ----------------------------------------------------
     // 2. Senkron Güncelleme (RAT ve Free List Durumu)
     // ----------------------------------------------------
-    always_ff @(posedge clk_i or negedge rstn_i) begin
+    always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             // Reset Durumu
             free_head  <= '0;
@@ -140,13 +140,13 @@ module rename import riscv_pkg::*; #(
             // --- 1. COMMIT İŞLEMİ (Register'ları Boşa Çıkarma) ---
             // Eski, üzerine yazılmış olan PRF'ler Commit aşamasında serbest bırakılır.
             if (commit_valid_i[0]) begin
-                free_list[new_free_tail] = commit_freed_prf_i[0];
-                new_free_tail = (new_free_tail + 1) % PRF_SIZE;
+                free_list[new_free_tail] <= commit_freed_prf_i[0];
+                new_free_tail = new_free_tail + 1'b1;
                 new_free_count = new_free_count + 1;
             end
             if (commit_valid_i[1]) begin
-                free_list[new_free_tail] = commit_freed_prf_i[1];
-                new_free_tail = (new_free_tail + 1) % PRF_SIZE;
+                free_list[new_free_tail] <= commit_freed_prf_i[1];
+                new_free_tail = new_free_tail + 1'b1;
                 new_free_count = new_free_count + 1;
             end
 
@@ -154,7 +154,7 @@ module rename import riscv_pkg::*; #(
             if (!rename_stall_o) begin
                 if (decode_i[0].valid && decode_i[0].rd_used && decode_i[0].rd_idx != 0) begin
                     rat[decode_i[0].rd_idx] <= free_list[new_free_head]; // RAT'ı güncelle
-                    new_free_head = (new_free_head + 1) % PRF_SIZE;
+                    new_free_head = new_free_head + 1'b1;
                     new_free_count = new_free_count - 1;
                 end
                 
@@ -162,7 +162,7 @@ module rename import riscv_pkg::*; #(
                     rat[decode_i[1].rd_idx] <= free_list[new_free_head]; // RAT'ı güncelle
                     // Eğer Komut 1 ve Komut 2 aynı register'a yazıyorsa (WAW hazard),
                     // RAT sadece Komut 2'nin atamasını (en son değeri) tutar. Bu doğrudur.
-                    new_free_head = (new_free_head + 1) % PRF_SIZE;
+                    new_free_head = new_free_head + 1'b1;
                     new_free_count = new_free_count - 1;
                 end
             end

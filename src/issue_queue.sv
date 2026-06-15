@@ -104,7 +104,7 @@ module issue_queue import riscv_pkg::*; #(
         
         // Unit 1 (ALU) Selection (Must not pick what Unit 0 picked)
         for (int i = 0; i < IQ_SIZE; i++) begin
-            if (ready_for_alu[i] && (!found_0 || sel_0 != i) && !found_1) begin 
+            if (ready_for_alu[i] && (!found_0 || sel_0 != i[3:0]) && !found_1) begin 
                 found_1 = 1'b1; 
                 sel_1 = i[$clog2(IQ_SIZE)-1:0]; 
             end
@@ -141,7 +141,7 @@ module issue_queue import riscv_pkg::*; #(
     // ----------------------------------------------------
     // SYNCHRONOUS UPDATE (Allocate, Wakeup, Clear)
     // ----------------------------------------------------
-    always_ff @(posedge clk_i or negedge rstn_i) begin
+    always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             count <= '0;
             for (int i = 0; i < IQ_SIZE; i++) iq[i].valid <= 1'b0;
@@ -178,7 +178,7 @@ module issue_queue import riscv_pkg::*; #(
                         // Find an empty slot and insert
                         for (int i = 0; i < IQ_SIZE; i++) begin
                             // Make sure we don't overwrite a slot we just emptied this cycle 
-                            if (!iq[i].valid && (!found_0 || sel_0 != i) && (!found_1 || sel_1 != i) && (!found_2 || sel_2 != i)) begin
+                            if (!iq[i].valid && (!found_0 || sel_0 != i[3:0]) && (!found_1 || sel_1 != i[3:0]) && (!found_2 || sel_2 != i[3:0])) begin
                                 iq[i].valid     <= 1'b1; 
                                 iq[i].dec       <= alloc_decode_i[a];
                                 iq[i].prf_rs1   <= alloc_prf_rs1_i[a]; 

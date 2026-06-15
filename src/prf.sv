@@ -38,7 +38,7 @@ module prf import riscv_pkg::*; #(
     assign rd_data_2_2 = (rd_addr_2_2 == 0) ? 32'b0 : registers[rd_addr_2_2];
 
     // Yazma İşlemleri
-    always_ff @(posedge clk_i or negedge rstn_i) begin
+    always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             for (int i = 0; i < PRF_SIZE; i++) registers[i] <= 32'b0;
         end else begin

@@ -39,7 +39,7 @@ module exec_lsu import riscv_pkg::*; (
     end
 
     // Gecikme (Latency) Flip-Flopu
-    always_ff @(posedge clk_i or negedge rstn_i) begin
+    always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             delay_valid <= 1'b0;
         end else begin

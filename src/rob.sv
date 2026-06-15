@@ -53,7 +53,7 @@ module rob import riscv_pkg::*; #(
     // ----------------------------------------------------
     // Senkron ROB Mantığı
     // ----------------------------------------------------
-    always_ff @(posedge clk_i or negedge rstn_i) begin
+    always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             head  <= '0;
             tail  <= '0;
@@ -93,7 +93,7 @@ module rob import riscv_pkg::*; #(
                 
                 // ROB'dan sil
                 rob_queue[next_head].valid <= 1'b0;
-                next_head = (next_head + 1) % ROB_SIZE;
+                next_head = next_head + 1'b1;
                 next_count = next_count - 1;
 
                 // İkinci komut da hazır mı? (Dual-Commit)
@@ -106,7 +106,7 @@ module rob import riscv_pkg::*; #(
                     commit_valid_o[1]    <= 1'b1;
                     
                     rob_queue[next_head].valid <= 1'b0;
-                    next_head = (next_head + 1) % ROB_SIZE;
+                    next_head = next_head + 1'b1;
                     next_count = next_count - 1;
                 end
             end
@@ -136,7 +136,7 @@ module rob import riscv_pkg::*; #(
                     rob_queue[next_tail].rd_idx  <= alloc_decode_i[0].rd_idx;
                     rob_queue[next_tail].prf_idx <= alloc_prf_rd_i[0];
                     
-                    next_tail = (next_tail + 1) % ROB_SIZE;
+                    next_tail = next_tail + 1'b1;
                     next_count = next_count + 1;
                 end
                 
@@ -148,7 +148,7 @@ module rob import riscv_pkg::*; #(
                     rob_queue[next_tail].rd_idx  <= alloc_decode_i[1].rd_idx;
                     rob_queue[next_tail].prf_idx <= alloc_prf_rd_i[1];
                     
-                    next_tail = (next_tail + 1) % ROB_SIZE;
+                    next_tail = next_tail + 1'b1;
                     next_count = next_count + 1;
                 end
             end

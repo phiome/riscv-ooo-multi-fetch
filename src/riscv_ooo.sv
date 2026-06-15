@@ -25,7 +25,7 @@ module riscv_ooo import riscv_pkg::*; #(
         $readmemh(DMemInitFile, data_mem,  0, 2047);
     end
 
-    assign data_o = data_mem[addr_i[31:2]]; // Testbench Okuması için
+    assign data_o = data_mem[addr_i[12:2]]; // Testbench Okuması için
 
     // ==========================================
     // 2. STALL VE KONTROL SİNYALLERİ
@@ -46,10 +46,10 @@ module riscv_ooo import riscv_pkg::*; #(
     
     assign fetched_pc_1 = pc_q;
     assign fetched_pc_2 = pc_q + 4;
-    assign fetched_instr_1 = instr_mem[fetched_pc_1[31:2]];
-    assign fetched_instr_2 = instr_mem[fetched_pc_2[31:2]];
+    assign fetched_instr_1 = instr_mem[fetched_pc_1[12:2]];
+    assign fetched_instr_2 = instr_mem[fetched_pc_2[12:2]];
 
-    always_ff @(posedge clk_i or negedge rstn_i) begin
+    always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             pc_q             <= '0;
             instr_id_counter <= 1; 
@@ -192,13 +192,13 @@ module riscv_ooo import riscv_pkg::*; #(
         .execute_o(execute_o[2]),
         
         .mem_addr_o(lsu_addr), .mem_wdata_o(lsu_wdata), .mem_we_o(lsu_we),
-        .mem_rdata_i(data_mem[lsu_addr[31:2]])
+        .mem_rdata_i(data_mem[lsu_addr[12:2]])
     );
 
     // Veri Belleğine Yazma İşlemi (Senkron)
     always_ff @(posedge clk_i) begin
         if (lsu_we) begin
-            data_mem[lsu_addr[31:2]] <= lsu_wdata;
+            data_mem[lsu_addr[12:2]] <= lsu_wdata;
         end
     end
 
