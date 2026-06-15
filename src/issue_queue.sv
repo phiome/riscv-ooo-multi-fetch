@@ -145,20 +145,6 @@ module issue_queue import riscv_pkg::*; #(
                     end
                 end
             end
-                        for (int i = 0; i < IQ_SIZE; i++) begin
-                            if (!iq[i].valid && !allocated_mask[i] && (!found_0 || sel_0 != i[3:0]) && (!found_1 || sel_1 != i[3:0]) && (!found_2 || sel_2 != i[3:0])) begin
-                                allocated_mask[i] = 1'b1;
-                                iq[i].valid     <= 1'b1; iq[i].dec <= alloc_decode_i[a];
-                                iq[i].prf_rs1   <= alloc_prf_rs1_i[a]; iq[i].prf_rs2 <= alloc_prf_rs2_i[a]; iq[i].prf_rd <= alloc_prf_rd_i[a];
-                                iq[i].rs1_ready <= rs1_rdy;
-                                iq[i].rs2_ready <= rs2_rdy;
-                                next_count = next_count + 1'b1;
-                                break;
-                            end
-                        end
-                    end
-                end
-            end
             count <= next_count;
         end
     end
