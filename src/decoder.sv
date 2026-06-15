@@ -1,7 +1,7 @@
 `timescale 1ns/1ps
 
 module decoder import riscv_pkg::*; (
-    input  logic        clk_i,   // Verilator uyarılarını engellemek için
+    input  logic        clk_i,
     input  logic [31:0] instr_i,
     input  logic [31:0] pc_i,    // Fetch aşamasından gelen Program Counter
     input  logic [31:0] id_i,    // Fetch aşamasından gelen Eşsiz Instruction ID
@@ -212,3 +212,4 @@ module decoder import riscv_pkg::*; (
     end
 
 endmodule
+

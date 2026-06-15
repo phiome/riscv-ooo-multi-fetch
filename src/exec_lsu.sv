@@ -79,3 +79,4 @@ module exec_lsu import riscv_pkg::*; (
     end
 
 endmodule
+
