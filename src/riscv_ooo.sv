@@ -174,17 +174,28 @@ module riscv_ooo import riscv_pkg::*; #(
         .wb_valid_o(wb_valid[1]), .wb_prf_rd_o(wb_prf_rd[1]), .wb_data_o(wb_data[1]), .execute_o(execute_o[1])
     );
 
-    logic [31:0] lsu_addr, lsu_wdata; logic lsu_we;
+// --- EXECUTION ÜNİTELERİ KISMININ SONU (riscv_ooo.sv içi) ---
+    logic [31:0] lsu_raddr, lsu_waddr, lsu_wdata; 
+    logic lsu_we;
+    
     exec_lsu unit2 (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .issue_valid_i(iss_v_2), .issue_decode_i(iss_dec_2), .rs1_data_i(r_data_2_1), .rs2_data_i(r_data_2_2), .prf_rd_i(iss_rd_2),
         .wb_valid_o(wb_valid[2]), .wb_prf_rd_o(wb_prf_rd[2]), .wb_data_o(wb_data[2]), .execute_o(execute_o[2]),
-        .mem_addr_o(lsu_addr), .mem_wdata_o(lsu_wdata), .mem_we_o(lsu_we), .mem_rdata_i(data_mem[lsu_addr[12:2]]),
+        
+        .mem_raddr_o(lsu_raddr), 
+        .mem_rdata_i(data_mem[lsu_raddr[12:2]]), // Anında okuma
+        
+        .mem_waddr_o(lsu_waddr), 
+        .mem_wdata_o(lsu_wdata), 
+        .mem_we_o(lsu_we),
+        
         .lsu_log_addr_o(lsu_log_addr), .lsu_log_data_o(lsu_log_data), .lsu_log_we_o(lsu_log_we)
     );
 
+    // Belleğe Yazma (Gecikmeli Adres ile)
     always_ff @(posedge clk_i) begin
-        if (lsu_we) data_mem[lsu_addr[12:2]] <= lsu_wdata;
+        if (lsu_we) data_mem[lsu_waddr[12:2]] <= lsu_wdata;
     end
 
 endmodule
