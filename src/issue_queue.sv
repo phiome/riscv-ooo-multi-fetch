@@ -13,7 +13,7 @@ module issue_queue import riscv_pkg::*; #(
     input  logic [5:0]    alloc_prf_rd_i [2],
     
     output logic          iq_stall_o,
-    input  logic [31:0]   rob_head_id_i, // EKLENDİ
+    input  logic [31:0]   rob_head_id_i, 
     
     input  logic          wb_valid_i [3], 
     input  logic [5:0]    wb_prf_rd_i [3],
@@ -55,7 +55,6 @@ module issue_queue import riscv_pkg::*; #(
             logic is_ready = iq[i].valid && iq[i].rs1_ready && iq[i].rs2_ready;
             ready_for_alu_br[i] = is_ready && (iq[i].dec.is_branch || iq[i].dec.is_jump || (!iq[i].dec.is_mem && !iq[i].dec.is_branch)); 
             ready_for_alu[i]    = is_ready && (!iq[i].dec.is_mem && !iq[i].dec.is_branch && !iq[i].dec.is_jump);
-            // GÜVENLİK: LSU komutları sadece ROB'un en başındaysa çalışır!
             ready_for_lsu[i]    = is_ready && iq[i].dec.is_mem && (iq[i].dec.id == rob_head_id_i);
         end
 
@@ -115,6 +114,12 @@ module issue_queue import riscv_pkg::*; #(
                         rs1_rdy = (!alloc_decode_i[a].rs1_used || alloc_decode_i[a].rs1_idx == 0 || prf_ready_table[alloc_prf_rs1_i[a]]);
                         rs2_rdy = (!alloc_decode_i[a].rs2_used || alloc_decode_i[a].rs2_idx == 0 || prf_ready_table[alloc_prf_rs2_i[a]]);
                         
+                        // Intra-packet dependency check (İkinci komut birincinin sonucunu beklemeli)
+                        if (a == 1 && alloc_valid_i[0] && alloc_decode_i[0].rd_used && alloc_decode_i[0].rd_idx != 0) begin
+                            if (alloc_prf_rs1_i[1] == alloc_prf_rd_i[0]) rs1_rdy = 1'b0;
+                            if (alloc_prf_rs2_i[1] == alloc_prf_rd_i[0]) rs2_rdy = 1'b0;
+                        end
+
                         for (int w = 0; w < 3; w++) begin
                             if (wb_valid_i[w] && wb_prf_rd_i[w] != 0) begin
                                 if (alloc_prf_rs1_i[a] == wb_prf_rd_i[w]) rs1_rdy = 1'b1;

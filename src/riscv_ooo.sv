@@ -24,7 +24,6 @@ module riscv_ooo import riscv_pkg::*; #(
 
     assign data_o = data_mem[addr_i[12:2]]; 
 
-    // --- STALL KONTROLLERİ ---
     logic fetch_stall, rename_stall, rob_stall, iq_stall, branch_in_flight;
     assign fetch_stall = rename_stall | rob_stall | iq_stall | branch_in_flight;
 
@@ -44,7 +43,6 @@ module riscv_ooo import riscv_pkg::*; #(
     decoder dec_inst_1 (.clk_i(clk_i), .instr_i(fetched_instr_1), .pc_i(fetched_pc_1), .id_i(instr_id_counter),   .dinstr_o(dec_1));
     decoder dec_inst_2 (.clk_i(clk_i), .instr_i(fetched_instr_2), .pc_i(fetched_pc_2), .id_i(instr_id_counter+1), .dinstr_o(dec_2));
 
-    // --- FETCH AŞAMASI (Güvenli Branch Bekletme) ---
     always_ff @(posedge clk_i) begin
         if (!rstn_i) begin
             branch_in_flight <= 1'b0;
@@ -73,7 +71,7 @@ module riscv_ooo import riscv_pkg::*; #(
                 pc_q <= branch_taken ? branch_target : fallthrough_pc;
             end else if (!fetch_stall) begin
                 if (dec_1.valid && (dec_1.is_branch || dec_1.is_jump)) begin
-                    pc_q <= pc_q; // Bekle
+                    pc_q <= pc_q; 
                     instr_id_counter <= instr_id_counter + 1; 
                 end else begin
                     pc_q <= pc_q + 8;
@@ -88,15 +86,13 @@ module riscv_ooo import riscv_pkg::*; #(
         if (!fetch_stall) begin
             if (dec_1.valid) begin
                 decode_o[0] = dec_1;
-                // dec_1 Branch ise, dec_2 çöpe atılır (Spekülasyon engellendi)
                 if (!(dec_1.is_branch || dec_1.is_jump) && dec_2.valid) decode_o[1] = dec_2;
             end
         end
     end
 
-    // --- RENAME ---
     logic       ren_valid [2];
-    logic [5:0] ren_rs1 [2], ren_rs2 [2], ren_rd [2];
+    logic [5:0] ren_rs1 [2], ren_rs2 [2], ren_rd [2], ren_old_prf [2];
     logic       com_valid [2]; logic [5:0] com_freed [2]; 
 
     rename rename_inst (
@@ -104,33 +100,32 @@ module riscv_ooo import riscv_pkg::*; #(
         .decode_i          (decode_o), 
         .rename_valid_o    (ren_valid),
         .rename_prf_rs1_o  (ren_rs1), .rename_prf_rs2_o  (ren_rs2), .rename_prf_rd_o   (ren_rd),
+        .rename_old_prf_o  (ren_old_prf), // BAĞLANDI
         .commit_valid_i    (com_valid), .commit_freed_prf_i(com_freed),
         .rename_stall_o    (rename_stall)
     );
 
-    // --- ROB ---
     execute_t exec_res [3]; 
     assign exec_res[0] = execute_o[0]; assign exec_res[1] = execute_o[1]; assign exec_res[2] = execute_o[2];
 
     logic [31:0] alloc_instr [2];
     assign alloc_instr[0] = fetched_instr_1; assign alloc_instr[1] = fetched_instr_2;
     logic [31:0] wb_data [3]; 
-    
-    logic [31:0] lsu_log_addr, lsu_log_data;
-    logic        lsu_log_we;
+    logic [31:0] lsu_log_addr, lsu_log_data; logic lsu_log_we;
     logic [31:0] rob_head_id;
 
     rob rob_inst (
         .clk_i(clk_i), .rstn_i(rstn_i),
-        .alloc_valid_i (ren_valid), .alloc_decode_i(decode_o), .alloc_prf_rd_i(ren_rd), .alloc_instr_i(alloc_instr),
+        .alloc_valid_i (ren_valid), .alloc_decode_i(decode_o), .alloc_prf_rd_i(ren_rd), 
+        .alloc_old_prf_i(ren_old_prf), // BAĞLANDI
+        .alloc_instr_i (alloc_instr),
         .rob_stall_o   (rob_stall), .rob_head_id_o(rob_head_id),
         .execute_i     (exec_res),  .wb_data_i    (wb_data),
         .lsu_log_addr_i(lsu_log_addr), .lsu_log_data_i(lsu_log_data), .lsu_log_we_i(lsu_log_we),
-        .commit_o      (commit_o),  .commit_valid_o(com_valid)
+        .commit_o      (commit_o),  .commit_valid_o(com_valid),
+        .commit_freed_prf_o(com_freed) // BAĞLANDI (Döngü Tamamlandı!)
     );
-    assign com_freed[0] = '0; assign com_freed[1] = '0; 
 
-    // --- ISSUE QUEUE ---
     logic       wb_valid [3];
     logic [5:0] wb_prf_rd [3];
     logic iss_v_0, iss_v_1, iss_v_2;
@@ -148,7 +143,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .issue_valid_2_o(iss_v_2), .issue_decode_2_o(iss_dec_2), .issue_prf_rs1_2_o(iss_rs1_2), .issue_prf_rs2_2_o(iss_rs2_2), .issue_prf_rd_2_o(iss_rd_2)
     );
 
-    // --- PRF ---
     logic [31:0] r_data_0_1, r_data_0_2, r_data_1_1, r_data_1_2, r_data_2_1, r_data_2_2;
     prf prf_inst (
         .clk_i(clk_i), .rstn_i(rstn_i),
@@ -160,7 +154,6 @@ module riscv_ooo import riscv_pkg::*; #(
         .wb_en_2(wb_valid[2]), .wb_addr_2(wb_prf_rd[2]), .wb_data_2(wb_data[2])
     );
 
-    // --- EXECUTION ÜNİTELERİ ---
     exec_alu_branch unit0 (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .issue_valid_i(iss_v_0), .issue_decode_i(iss_dec_0), .rs1_data_i(r_data_0_1), .rs2_data_i(r_data_0_2), .prf_rd_i(iss_rd_0),
@@ -174,28 +167,17 @@ module riscv_ooo import riscv_pkg::*; #(
         .wb_valid_o(wb_valid[1]), .wb_prf_rd_o(wb_prf_rd[1]), .wb_data_o(wb_data[1]), .execute_o(execute_o[1])
     );
 
-// --- EXECUTION ÜNİTELERİ KISMININ SONU (riscv_ooo.sv içi) ---
-    logic [31:0] lsu_raddr, lsu_waddr, lsu_wdata; 
-    logic lsu_we;
-    
+    logic [31:0] lsu_raddr, lsu_waddr, lsu_wdata; logic lsu_we;
     exec_lsu unit2 (
         .clk_i(clk_i), .rstn_i(rstn_i),
         .issue_valid_i(iss_v_2), .issue_decode_i(iss_dec_2), .rs1_data_i(r_data_2_1), .rs2_data_i(r_data_2_2), .prf_rd_i(iss_rd_2),
         .wb_valid_o(wb_valid[2]), .wb_prf_rd_o(wb_prf_rd[2]), .wb_data_o(wb_data[2]), .execute_o(execute_o[2]),
-        
-        .mem_raddr_o(lsu_raddr), 
-        .mem_rdata_i(data_mem[lsu_raddr[12:2]]), // Anında okuma
-        
-        .mem_waddr_o(lsu_waddr), 
-        .mem_wdata_o(lsu_wdata), 
-        .mem_we_o(lsu_we),
-        
+        .mem_raddr_o(lsu_raddr), .mem_rdata_i(data_mem[lsu_raddr[12:2]]),
+        .mem_waddr_o(lsu_waddr), .mem_wdata_o(lsu_wdata), .mem_we_o(lsu_we),
         .lsu_log_addr_o(lsu_log_addr), .lsu_log_data_o(lsu_log_data), .lsu_log_we_o(lsu_log_we)
     );
 
-    // Belleğe Yazma (Gecikmeli Adres ile)
     always_ff @(posedge clk_i) begin
         if (lsu_we) data_mem[lsu_waddr[12:2]] <= lsu_wdata;
     end
-
 endmodule
