@@ -108,17 +108,21 @@ module issue_queue import riscv_pkg::*; #(
             if (found_1) begin iq[sel_1].valid <= 1'b0; next_count = next_count - 1'b1; end
             if (found_2) begin iq[sel_2].valid <= 1'b0; next_count = next_count - 1'b1; end
 
-            // 3. ALLOCATE
+// 3. ALLOCATE
             if (!iq_stall_o) begin
                 for (int a = 0; a < 2; a++) begin
                     if (alloc_valid_i[a]) begin
+                        // ÇÖZÜM: Değişkenleri bloğun en başında tanımlıyoruz!
+                        logic rs1_rdy;
+                        logic rs2_rdy;
+
                         if (alloc_decode_i[a].rd_used && alloc_decode_i[a].rd_idx != 0) begin
                             prf_ready_table[alloc_prf_rd_i[a]] <= 1'b0;
                         end
                         
-                        // CDB Bypass Mantığı
-                        logic rs1_rdy = (!alloc_decode_i[a].rs1_used || alloc_decode_i[a].rs1_idx == 0 || prf_ready_table[alloc_prf_rs1_i[a]]);
-                        logic rs2_rdy = (!alloc_decode_i[a].rs2_used || alloc_decode_i[a].rs2_idx == 0 || prf_ready_table[alloc_prf_rs2_i[a]]);
+                        // CDB Bypass Mantığı (Sadece değer ataması yapıyoruz)
+                        rs1_rdy = (!alloc_decode_i[a].rs1_used || alloc_decode_i[a].rs1_idx == 0 || prf_ready_table[alloc_prf_rs1_i[a]]);
+                        rs2_rdy = (!alloc_decode_i[a].rs2_used || alloc_decode_i[a].rs2_idx == 0 || prf_ready_table[alloc_prf_rs2_i[a]]);
                         
                         for (int w = 0; w < 3; w++) begin
                             if (wb_valid_i[w] && wb_prf_rd_i[w] != 0) begin
@@ -127,6 +131,20 @@ module issue_queue import riscv_pkg::*; #(
                             end
                         end
 
+                        for (int i = 0; i < IQ_SIZE; i++) begin
+                            if (!iq[i].valid && !allocated_mask[i] && (!found_0 || sel_0 != i[3:0]) && (!found_1 || sel_1 != i[3:0]) && (!found_2 || sel_2 != i[3:0])) begin
+                                allocated_mask[i] = 1'b1;
+                                iq[i].valid     <= 1'b1; iq[i].dec <= alloc_decode_i[a];
+                                iq[i].prf_rs1   <= alloc_prf_rs1_i[a]; iq[i].prf_rs2 <= alloc_prf_rs2_i[a]; iq[i].prf_rd <= alloc_prf_rd_i[a];
+                                iq[i].rs1_ready <= rs1_rdy;
+                                iq[i].rs2_ready <= rs2_rdy;
+                                next_count = next_count + 1'b1;
+                                break;
+                            end
+                        end
+                    end
+                end
+            end
                         for (int i = 0; i < IQ_SIZE; i++) begin
                             if (!iq[i].valid && !allocated_mask[i] && (!found_0 || sel_0 != i[3:0]) && (!found_1 || sel_1 != i[3:0]) && (!found_2 || sel_2 != i[3:0])) begin
                                 allocated_mask[i] = 1'b1;
