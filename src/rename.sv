@@ -89,24 +89,24 @@ module rename import riscv_pkg::*; #(
 
             if (commit_valid_i[0]) begin
                 free_list[new_free_tail] <= commit_freed_prf_i[0];
-                new_free_tail = (new_free_tail + 1) % PRF_SIZE;
+                new_free_tail = 6'(new_free_tail + 1) % PRF_SIZE;
                 new_free_count = new_free_count + 1;
             end
             if (commit_valid_i[1]) begin
                 free_list[new_free_tail] <= commit_freed_prf_i[1];
-                new_free_tail = (new_free_tail + 1) % PRF_SIZE;
+                new_free_tail = 6'(new_free_tail + 1) % PRF_SIZE;
                 new_free_count = new_free_count + 1;
             end
 
             if (!rename_stall_o) begin
                 if (decode_i[0].valid && decode_i[0].rd_used && decode_i[0].rd_idx != 0) begin
                     rat[decode_i[0].rd_idx] <= free_list[new_free_head];
-                    new_free_head = (new_free_head + 1) % PRF_SIZE;
+                    new_free_head = 6'(new_free_head + 1) % PRF_SIZE;
                     new_free_count = new_free_count - 1;
                 end
                 if (decode_i[1].valid && decode_i[1].rd_used && decode_i[1].rd_idx != 0) begin
                     rat[decode_i[1].rd_idx] <= free_list[new_free_head];
-                    new_free_head = (new_free_head + 1) % PRF_SIZE;
+                    new_free_head = 6'(new_free_head + 1) % PRF_SIZE;
                     new_free_count = new_free_count - 1;
                 end
             end
