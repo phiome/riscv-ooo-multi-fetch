@@ -1,5 +1,6 @@
 `timescale 1ns/1ps
-
+/* verilator lint_off WIDTHEXPAND */
+/* verilator lint_off WIDTHTRUNC */
 
 module rename import riscv_pkg::*; #(
     parameter PRF_SIZE = 64
